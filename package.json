@@ -1,0 +1,9 @@
+{
+  "name": "space-station-dashboard",
+  "version": "1.0.0",
+  "description": "Unified build for Space Station Dashboard",
+  "scripts": {
+    "build": "npm --prefix frontend install && npm --prefix frontend run build && npm --prefix backend install",
+    "start": "npm --prefix backend start"
+  }
+}

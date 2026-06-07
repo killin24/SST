@@ -1,0 +1,182 @@
+import express from 'express';
+import http from 'http';
+import { Server } from 'socket.io';
+import cors from 'cors';
+import helmet from 'helmet';
+import morgan from 'morgan';
+import rateLimit from 'express-rate-limit';
+import dotenv from 'dotenv';
+import { redisClient, isRedisReady } from './config/redisClient.js';
+import apiRoutes from './routes/api.js';
+import errorHandler from './middleware/errorHandler.js';
+import { getTelemetry } from './services/satelliteService.js';
+import { getCrew } from './services/crewService.js';
+import path from 'path';
+import { fileURLToPath } from 'url';
+
+const __filename = fileURLToPath(import.meta.url);
+const __dirname = path.dirname(__filename);
+
+dotenv.config();
+
+const app = express();
+const PORT = process.env.PORT || 5000;
+
+// Wrap express app in HTTP Server for Socket.io
+const server = http.createServer(app);
+
+const ALLOWED_ORIGINS = [
+  'http://localhost:5173',
+  'http://localhost:5174',
+  'http://localhost:5175',
+  'http://localhost:5176',
+  'http://127.0.0.1:5173',
+  'http://127.0.0.1:5174',
+  'http://127.0.0.1:5175',
+  'http://127.0.0.1:5176',
+];
+
+// ─────────────────────────────────────────────────────────────
+// Socket.io — real-time broadcast channel
+// ─────────────────────────────────────────────────────────────
+const io = new Server(server, {
+  cors: { origin: ALLOWED_ORIGINS, methods: ['GET', 'POST'] },
+});
+
+// ─────────────────────────────────────────────────────────────
+// Express Middleware
+// ─────────────────────────────────────────────────────────────
+app.use(helmet());
+app.use(cors({ origin: ALLOWED_ORIGINS, methods: ['GET'] }));
+app.use(rateLimit({
+  windowMs: 1 * 60 * 1000,
+  max: 120,
+  standardHeaders: true,
+  legacyHeaders: false,
+}));
+app.use(morgan('dev'));
+app.use(express.json());
+app.use('/api', apiRoutes);
+app.use(errorHandler);
+
+// Serve Static Files from Vite build
+app.use(express.static(path.join(__dirname, '../../frontend/dist')));
+
+// Catch-all route for React SPA
+app.get('*', (req, res) => {
+  res.sendFile(path.join(__dirname, '../../frontend/dist/index.html'));
+});
+
+// ─────────────────────────────────────────────────────────────
+// Background Worker — Telemetry Fetcher for a Single Station
+// ─────────────────────────────────────────────────────────────
+const fetchAndBroadcastStation = async (stationId) => {
+  try {
+    const { data } = await getTelemetry(stationId);
+
+    // Cache the latest reading in Redis for new socket connections
+    if (isRedisReady()) {
+      try {
+        const key = `telemetry_${stationId}`;
+        await redisClient.set(key, JSON.stringify(data));
+      } catch (err) {
+        console.warn(`[Redis SET ${stationId}] ${err.message}`);
+      }
+    }
+
+    // Broadcast to all connected clients
+    io.emit('telemetry_update', { station: stationId, data });
+  } catch (err) {
+    console.error(`[Worker ${stationId}] ${err.message}`);
+
+    // Fault tolerance: re-broadcast last known state
+    if (isRedisReady()) {
+      try {
+        const cached = await redisClient.get(`telemetry_${stationId}`);
+        if (cached) {
+          io.emit('telemetry_update', {
+            station: stationId,
+            data: JSON.parse(cached),
+            source: 'redis-fallback',
+          });
+        }
+      } catch (_) {}
+    }
+  }
+};
+
+// ─────────────────────────────────────────────────────────────
+// Background Worker — Crew Data
+// ─────────────────────────────────────────────────────────────
+const fetchAndBroadcastCrew = async () => {
+  try {
+    const { data } = await getCrew();
+    io.emit('crew_update', data);
+  } catch (err) {
+    console.error('[Worker Crew]', err.message);
+  }
+};
+
+// ─────────────────────────────────────────────────────────────
+// Background Polling Loops
+// ─────────────────────────────────────────────────────────────
+
+// Stagger ISS and Tiangong by 1.5 s to avoid thundering herd
+const startWorkers = () => {
+  // ISS: immediate + every 5 s
+  fetchAndBroadcastStation('iss');
+  setInterval(() => fetchAndBroadcastStation('iss'), 5000);
+
+  // Tiangong: offset by 1.5 s then every 5 s
+  setTimeout(() => {
+    fetchAndBroadcastStation('tiangong');
+    setInterval(() => fetchAndBroadcastStation('tiangong'), 5000);
+  }, 1500);
+
+  // Crew: immediate + every 30 s
+  fetchAndBroadcastCrew();
+  setInterval(fetchAndBroadcastCrew, 30000);
+};
+
+// ─────────────────────────────────────────────────────────────
+// Socket.io Connection Lifecycle
+// ─────────────────────────────────────────────────────────────
+io.on('connection', async (socket) => {
+  console.log(`[Socket.io] Client connected: ${socket.id}`);
+
+  // Immediately send cached data for both stations
+  if (isRedisReady()) {
+    for (const stationId of ['iss', 'tiangong']) {
+      try {
+        const cached = await redisClient.get(`telemetry_${stationId}`);
+        if (cached) {
+          socket.emit('telemetry_update', {
+            station: stationId,
+            data: JSON.parse(cached),
+            source: 'redis',
+          });
+        }
+      } catch (err) {
+        console.warn(`[Socket connect ${stationId}]`, err.message);
+      }
+    }
+
+    // Send crew data immediately
+    try {
+      const crewCached = await redisClient.get('crew_data');
+      if (crewCached) socket.emit('crew_update', JSON.parse(crewCached));
+    } catch (_) {}
+  }
+
+  socket.on('disconnect', () => {
+    console.log(`[Socket.io] Client disconnected: ${socket.id}`);
+  });
+});
+
+// ─────────────────────────────────────────────────────────────
+// Start server
+// ─────────────────────────────────────────────────────────────
+server.listen(PORT, () => {
+  console.log(`🚀 Server running on port ${PORT}`);
+  startWorkers();
+});
