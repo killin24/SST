@@ -1,7 +1,6 @@
 import React, { useEffect, useRef } from 'react';
-
-// Dynamically import Leaflet to avoid SSR issues in Vite
-let L = null;
+import L from 'leaflet';
+import 'leaflet/dist/leaflet.css';
 
 /**
  * StationMap — Interactive Leaflet world map showing:
@@ -25,13 +24,8 @@ const StationMap = ({ data, station }) => {
   useEffect(() => {
     let mounted = true;
 
-    const initMap = async () => {
+    const initMap = () => {
       if (leafletRef.current || !mapRef.current) return;
-
-      // Dynamic import — avoids Vite build issues with Leaflet
-      const leaflet = await import('leaflet');
-      await import('leaflet/dist/leaflet.css');
-      L = leaflet.default || leaflet;
 
       if (!mounted || !mapRef.current) return;
 
@@ -60,7 +54,7 @@ const StationMap = ({ data, station }) => {
 
   // Update map when data changes
   useEffect(() => {
-    if (!leafletRef.current || !data || !L) return;
+    if (!leafletRef.current || !data) return;
 
     const map = leafletRef.current;
     const lat = data.latitude;
