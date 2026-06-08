@@ -150,7 +150,7 @@ body::before {
 }
 
 .leaflet-tile {
-  filter: brightness(0.6) saturate(0.4) hue-rotate(200deg);
+  /* No filter needed; CartoDB Dark Matter is dark enough */
 }
 
 .leaflet-control-attribution,
