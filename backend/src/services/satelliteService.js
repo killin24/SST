@@ -15,6 +15,15 @@ const TLE_GP_URL = (catNum) =>
 
 const NORAD_IDS = { iss: 25544, tiangong: 48274 };
 
+const FALLBACK_TLES = {
+  iss: `ISS (ZARYA)
+1 25544U 98067A   26158.90128687  .00007994  00000+0  14961-3 0  9995
+2 25544  51.6338 346.0598 0006926 145.2709 214.8733 15.49660544570312`,
+  tiangong: `CSS (TIANHE)
+1 48274U 21035A   26159.08188282  .00025465  00000+0  30374-3 0  9997
+2 48274  41.4696  17.3987 0008703   5.5904 354.5031 15.60427341291740`
+};
+
 // In-memory TLE cache (refreshed every 15 minutes)
 const tleCache = { iss: null, tiangong: null, lastFetched: { iss: 0, tiangong: 0 } };
 const TLE_CACHE_MS = 15 * 60 * 1000;
@@ -138,18 +147,23 @@ const fetchSatrec = async (stationId) => {
   if (!noradId) throw new Error(`Unknown station: ${stationId}`);
 
   // Force text/plain Accept header so CelesTrak returns 3-line TLE (not CSV)
-  const response = await axios.get(TLE_GP_URL(noradId), {
-    timeout: 12000,
-    headers: {
-      'User-Agent': 'SpaceDashboard/1.0',
-      'Accept': 'text/plain, */*',
-    },
-    responseType: 'text',
-  });
-
-  const rawText = typeof response.data === 'string'
-    ? response.data
-    : JSON.stringify(response.data);
+  let rawText;
+  try {
+    const response = await axios.get(TLE_GP_URL(noradId), {
+      timeout: 12000,
+      headers: {
+        'User-Agent': 'SpaceDashboard/1.0',
+        'Accept': 'text/plain, */*',
+      },
+      responseType: 'text',
+    });
+    rawText = typeof response.data === 'string'
+      ? response.data
+      : JSON.stringify(response.data);
+  } catch (err) {
+    console.warn(`[TLE] Failed to fetch TLE for ${stationId} from CelesTrak, using local hardcoded fallback.`);
+    rawText = FALLBACK_TLES[stationId];
+  }
 
   const textLines = rawText.trim().split('\n').map(l => l.trim()).filter(Boolean);
   let result;
