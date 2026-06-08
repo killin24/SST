@@ -1,6 +1,8 @@
 import React, { useEffect, useRef } from 'react';
-import L from 'leaflet';
 import 'leaflet/dist/leaflet.css';
+
+// Dynamically import Leaflet to avoid module resolution issues
+let L = null;
 
 /**
  * StationMap — Interactive Leaflet world map showing:
@@ -24,8 +26,13 @@ const StationMap = ({ data, station }) => {
   useEffect(() => {
     let mounted = true;
 
-    const initMap = () => {
+    const initMap = async () => {
       if (leafletRef.current || !mapRef.current) return;
+
+      if (!L) {
+        const leaflet = await import('leaflet');
+        L = leaflet.default || leaflet;
+      }
 
       if (!mounted || !mapRef.current) return;
 
@@ -52,9 +59,8 @@ const StationMap = ({ data, station }) => {
     return () => { mounted = false; };
   }, []);
 
-  // Update map when data changes
   useEffect(() => {
-    if (!leafletRef.current || !data) return;
+    if (!leafletRef.current || !data || !L) return;
 
     const map = leafletRef.current;
     const lat = data.latitude;
