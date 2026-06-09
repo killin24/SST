@@ -163,23 +163,21 @@ const backfillHistory = async () => {
         const now = Date.now();
         const sevenDaysMins = 7 * 24 * 60;
         
-        let batch = [];
+        const promises = [];
         for (let i = 0; i < sevenDaysMins; i++) {
           const t = now - (i * 60000);
           try {
             const point = propagateSatrec(satrecData, new Date(t));
-            batch.push({ score: t, value: JSON.stringify(point) });
+            promises.push(
+              redisClient.zAdd(historyKey, [{ score: t, value: JSON.stringify(point) }]).catch(() => {})
+            );
           } catch (e) {
             // ignore invalid points
           }
-          
-          if (batch.length >= 1000 || i === sevenDaysMins - 1) {
-            if (batch.length > 0) {
-              await redisClient.zAdd(historyKey, batch);
-              batch = [];
-            }
-          }
         }
+        
+        // Wait for all individual inserts to finish
+        await Promise.all(promises);
         console.log(`[Backfill] ✅ Completed 7-day data generation for ${stationId}.`);
       }
     }

@@ -6,7 +6,10 @@ const redisClient = createClient({
   url: process.env.REDIS_URL || 'redis://127.0.0.1:6379',
   RESP: 2,
   socket: {
-    reconnectStrategy: false
+    reconnectStrategy: (retries) => {
+      if (retries > 10) return false;
+      return Math.min(retries * 50, 2000);
+    }
   }
 });
 
