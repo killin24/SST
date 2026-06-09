@@ -46,7 +46,33 @@ const io = new Server(server, {
 // ─────────────────────────────────────────────────────────────
 // Express Middleware
 // ─────────────────────────────────────────────────────────────
-app.use(helmet());
+app.use(helmet({
+  contentSecurityPolicy: {
+    directives: {
+      defaultSrc: ["'self'"],
+      scriptSrc: ["'self'", "'unsafe-inline'"],
+      styleSrc: ["'self'", "'unsafe-inline'", "https://unpkg.com", "https://*.cartocdn.com"],
+      imgSrc: [
+        "'self'",
+        "data:",
+        "blob:",
+        "https://*.basemaps.cartocdn.com",
+        "https://*.cartocdn.com",
+        "https://unpkg.com",
+      ],
+      connectSrc: [
+        "'self'",
+        "ws:",
+        "wss:",
+        "https://api.wheretheiss.at",
+        "https://celestrak.org",
+        "https://corquaid.github.io",
+      ],
+      fontSrc: ["'self'", "https://fonts.gstatic.com"],
+      workerSrc: ["'self'", "blob:"],
+    },
+  },
+}));
 app.use(cors({ origin: ALLOWED_ORIGINS, methods: ['GET'] }));
 app.use(rateLimit({
   windowMs: 1 * 60 * 1000,
