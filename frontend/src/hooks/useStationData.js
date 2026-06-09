@@ -27,7 +27,14 @@ export const useStationData = (socket) => {
 
     const handleTelemetry = (payload) => {
       const { station, data } = payload;
-      const point = { ...data, timestamp: data.timestamp || Date.now() };
+      const point = { 
+        ...data, 
+        latitude: Number(data.latitude),
+        longitude: Number(data.longitude),
+        altitude: Number(data.altitude),
+        velocity: Number(data.velocity),
+        timestamp: data.timestamp || Date.now() 
+      };
 
       if (station === 'iss') {
         setIssData(point);
