@@ -227,7 +227,7 @@ function App() {
             {/* ── Primary Metrics ──────────────────────────────── */}
         <div style={{
           display: 'grid',
-          gridTemplateColumns: 'repeat(auto-fit, minmax(260px, 1fr))',
+          gridTemplateColumns: 'repeat(auto-fit, minmax(min(100%, 260px), 1fr))',
           gap: '1rem',
           marginBottom: '1rem',
         }}>
@@ -257,7 +257,7 @@ function App() {
         {/* ── Secondary Metrics ────────────────────────────── */}
         <div style={{
           display: 'grid',
-          gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))',
+          gridTemplateColumns: 'repeat(auto-fit, minmax(min(100%, 200px), 1fr))',
           gap: '1rem',
           marginBottom: '2rem',
         }}>
@@ -317,13 +317,11 @@ function App() {
           <StationMap data={data} station={selectedStation} />
         </div>
 
-        {/* ── Crew + Charts ────────────────────────────────── */}
         <div style={{
           display: 'grid',
-          gridTemplateColumns: 'minmax(280px, 380px) 1fr',
+          gridTemplateColumns: 'repeat(auto-fit, minmax(min(100%, 320px), 1fr))',
           gap: '1.5rem',
           marginBottom: '2rem',
-          flexWrap: 'wrap',
         }}>
           <CrewPanel crew={crewList} station={selectedStation} />
 
@@ -342,7 +340,7 @@ function App() {
         {/* ── Lat/Lon Charts ───────────────────────────────── */}
         <div style={{
           display: 'grid',
-          gridTemplateColumns: 'repeat(auto-fit, minmax(400px, 1fr))',
+          gridTemplateColumns: 'repeat(auto-fit, minmax(min(100%, 320px), 1fr))',
           gap: '1.5rem',
         }}>
           <TelemetryChart
