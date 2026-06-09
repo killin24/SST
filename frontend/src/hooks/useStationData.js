@@ -14,11 +14,11 @@ export const useStationData = (socket) => {
   const [tiangongHistory, setTiangongHistory] = useState([]);
   const [crew, setCrew] = useState({ iss: [], tiangong: [] });
 
-  // Keep history buffer — max 30 points per station
+  // Keep history buffer — max 400 points per station (allows ~5 hours of data + live updates)
   const appendHistory = (setter, point) => {
     setter(prev => {
       const next = [...prev, point];
-      return next.length > 30 ? next.slice(-30) : next;
+      return next.length > 400 ? next.slice(-400) : next;
     });
   };
 
@@ -49,11 +49,31 @@ export const useStationData = (socket) => {
       setCrew({ iss: data.iss || [], tiangong: data.tiangong || [] });
     };
 
+    const handleHistory = (payload) => {
+      const { station, data } = payload;
+      const parsedData = data.map(d => ({
+        ...d,
+        latitude: Number(d.latitude),
+        longitude: Number(d.longitude),
+        altitude: Number(d.altitude),
+        velocity: Number(d.velocity),
+        timestamp: d.timestamp || Date.now()
+      }));
+
+      if (station === 'iss') {
+        setIssHistory(parsedData);
+      } else if (station === 'tiangong') {
+        setTiangongHistory(parsedData);
+      }
+    };
+
     socket.on('telemetry_update', handleTelemetry);
+    socket.on('telemetry_history', handleHistory);
     socket.on('crew_update', handleCrew);
 
     return () => {
       socket.off('telemetry_update', handleTelemetry);
+      socket.off('telemetry_history', handleHistory);
       socket.off('crew_update', handleCrew);
     };
   }, [socket]);

@@ -70,6 +70,9 @@ app.get(/.*/, (req, res) => {
 // ─────────────────────────────────────────────────────────────
 // Background Worker — Telemetry Fetcher for a Single Station
 // ─────────────────────────────────────────────────────────────
+const lastHistorySave = { iss: 0, tiangong: 0 };
+const HISTORY_RETENTION_MS = 7 * 24 * 60 * 60 * 1000; // 7 days
+
 const fetchAndBroadcastStation = async (stationId) => {
   try {
     const { data } = await getTelemetry(stationId);
@@ -79,6 +82,20 @@ const fetchAndBroadcastStation = async (stationId) => {
       try {
         const key = `telemetry_${stationId}`;
         await redisClient.set(key, JSON.stringify(data));
+
+        // Downsample historical storage to 1 point per minute
+        const now = Date.now();
+        if (now - lastHistorySave[stationId] >= 60000) {
+          const historyKey = `history_${stationId}`;
+          const score = data.timestamp || now;
+          const value = JSON.stringify(data);
+          
+          await redisClient.sendCommand(['ZADD', historyKey, score.toString(), value]);
+          await redisClient.sendCommand(['ZREMRANGEBYSCORE', historyKey, '-inf', (now - HISTORY_RETENTION_MS).toString()]);
+          
+          lastHistorySave[stationId] = now;
+        }
+
       } catch (err) {
         console.warn(`[Redis SET ${stationId}] ${err.message}`);
       }
@@ -146,14 +163,31 @@ io.on('connection', async (socket) => {
 
   // Immediately send cached data for both stations
   if (isRedisReady()) {
+    const fiveHoursAgo = Date.now() - (5 * 60 * 60 * 1000);
+
     for (const stationId of ['iss', 'tiangong']) {
       try {
+        // Send latest point
         const cached = await redisClient.get(`telemetry_${stationId}`);
         if (cached) {
           socket.emit('telemetry_update', {
             station: stationId,
             data: JSON.parse(cached),
             source: 'redis',
+          });
+        }
+
+        // Send historical timeseries (last 5 hours)
+        const historyData = await redisClient.sendCommand([
+          'ZRANGEBYSCORE', `history_${stationId}`, 
+          fiveHoursAgo.toString(), '+inf'
+        ]);
+        
+        if (historyData && historyData.length > 0) {
+          const parsedHistory = historyData.map(str => JSON.parse(str));
+          socket.emit('telemetry_history', {
+            station: stationId,
+            data: parsedHistory
           });
         }
       } catch (err) {

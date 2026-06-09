@@ -215,9 +215,37 @@ function App() {
           </div>
         </header>
 
-        {/* ── Station Selector ─────────────────────────────── */}
-        <div style={{ display: 'flex', justifyContent: 'center', marginBottom: '2.5rem' }}>
+        {/* ── Station Selector & Actions ─────────────────────────────── */}
+        <div style={{ display: 'flex', justifyContent: 'center', alignItems: 'center', gap: '1.5rem', marginBottom: '2.5rem', flexWrap: 'wrap' }}>
           <StationSelector selected={selectedStation} onChange={setSelectedStation} />
+          
+          <button
+            onClick={() => {
+              const url = import.meta.env.MODE === 'production' 
+                ? `/api/history/${selectedStation}/download`
+                : `http://localhost:5000/api/history/${selectedStation}/download`;
+              window.open(url, '_blank');
+            }}
+            style={{
+              background: 'rgba(255,255,255,0.05)',
+              border: '1px solid var(--panel-border)',
+              color: 'var(--text-secondary)',
+              padding: '0.6rem 1.2rem',
+              borderRadius: '0.5rem',
+              cursor: 'pointer',
+              fontSize: '0.875rem',
+              fontWeight: 600,
+              display: 'flex',
+              alignItems: 'center',
+              gap: '0.5rem',
+              transition: 'all 0.2s',
+            }}
+            onMouseOver={(e) => { e.currentTarget.style.color = 'var(--text-primary)'; e.currentTarget.style.background = 'rgba(255,255,255,0.1)' }}
+            onMouseOut={(e) => { e.currentTarget.style.color = 'var(--text-secondary)'; e.currentTarget.style.background = 'rgba(255,255,255,0.05)' }}
+            title="Download CSV of the last 7 days of telemetry"
+          >
+            📥 Download 7-Day Data
+          </button>
         </div>
 
         {!data ? (
