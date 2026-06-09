@@ -343,3 +343,5 @@ export const getTelemetry = async (stationId = 'iss') => {
     throw new Error(`Failed to fetch ${stationId} telemetry: ${err.message}`);
   }
 };
+
+export { fetchSatrec, propagateSatrec };

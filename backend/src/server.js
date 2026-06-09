@@ -9,7 +9,7 @@ import dotenv from 'dotenv';
 import { redisClient, isRedisReady } from './config/redisClient.js';
 import apiRoutes from './routes/api.js';
 import errorHandler from './middleware/errorHandler.js';
-import { getTelemetry } from './services/satelliteService.js';
+import { getTelemetry, fetchSatrec, propagateSatrec } from './services/satelliteService.js';
 import { getCrew } from './services/crewService.js';
 import path from 'path';
 import { fileURLToPath } from 'url';
@@ -135,11 +135,51 @@ const fetchAndBroadcastCrew = async () => {
 };
 
 // ─────────────────────────────────────────────────────────────
+// Backfill Missing History
+// ─────────────────────────────────────────────────────────────
+const backfillHistory = async () => {
+  if (!isRedisReady()) return;
+  try {
+    for (const stationId of ['iss', 'tiangong']) {
+      const historyKey = `history_${stationId}`;
+      const count = await redisClient.zCard(historyKey);
+      
+      // If we have less than 1 hour of data, backfill 7 full days
+      if (count < 60) {
+        console.log(`[Backfill] Simulating 7 days of historical orbit data for ${stationId}...`);
+        const satrecData = await fetchSatrec(stationId);
+        
+        const now = Date.now();
+        const pipeline = redisClient.multi();
+        const sevenDaysMins = 7 * 24 * 60;
+        
+        for (let i = 0; i < sevenDaysMins; i++) {
+          const t = now - (i * 60000);
+          try {
+            const point = propagateSatrec(satrecData, new Date(t));
+            pipeline.zAdd(historyKey, [{ score: t, value: JSON.stringify(point) }]);
+          } catch (e) {
+            // ignore invalid points
+          }
+        }
+        await pipeline.exec();
+        console.log(`[Backfill] ✅ Completed 7-day data generation for ${stationId}.`);
+      }
+    }
+  } catch (err) {
+    console.error('[Backfill] Error:', err.message);
+  }
+};
+
+// ─────────────────────────────────────────────────────────────
 // Background Polling Loops
 // ─────────────────────────────────────────────────────────────
 
 // Stagger ISS and Tiangong by 1.5 s to avoid thundering herd
 const startWorkers = () => {
+  // Run backfill first if needed
+  backfillHistory();
+
   // ISS: immediate + every 5 s
   fetchAndBroadcastStation('iss');
   setInterval(() => fetchAndBroadcastStation('iss'), 5000);
