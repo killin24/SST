@@ -138,7 +138,18 @@ const fetchAndBroadcastCrew = async () => {
 // Backfill Missing History
 // ─────────────────────────────────────────────────────────────
 const backfillHistory = async () => {
-  if (!isRedisReady()) return;
+  // Wait up to 5 seconds for Redis to connect
+  let retries = 50;
+  while (!isRedisReady() && retries > 0) {
+    await new Promise(r => setTimeout(r, 100));
+    retries--;
+  }
+  
+  if (!isRedisReady()) {
+    console.warn('[Backfill] Redis not ready after 5s, aborting backfill.');
+    return;
+  }
+  
   try {
     for (const stationId of ['iss', 'tiangong']) {
       const historyKey = `history_${stationId}`;
@@ -150,19 +161,25 @@ const backfillHistory = async () => {
         const satrecData = await fetchSatrec(stationId);
         
         const now = Date.now();
-        const pipeline = redisClient.multi();
         const sevenDaysMins = 7 * 24 * 60;
         
+        let batch = [];
         for (let i = 0; i < sevenDaysMins; i++) {
           const t = now - (i * 60000);
           try {
             const point = propagateSatrec(satrecData, new Date(t));
-            pipeline.zAdd(historyKey, [{ score: t, value: JSON.stringify(point) }]);
+            batch.push({ score: t, value: JSON.stringify(point) });
           } catch (e) {
             // ignore invalid points
           }
+          
+          if (batch.length >= 1000 || i === sevenDaysMins - 1) {
+            if (batch.length > 0) {
+              await redisClient.zAdd(historyKey, batch);
+              batch = [];
+            }
+          }
         }
-        await pipeline.exec();
         console.log(`[Backfill] ✅ Completed 7-day data generation for ${stationId}.`);
       }
     }
