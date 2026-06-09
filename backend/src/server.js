@@ -155,9 +155,10 @@ const backfillHistory = async () => {
       const historyKey = `history_${stationId}`;
       const count = await redisClient.zCard(historyKey);
       
-      // If we have less than 1 hour of data, backfill 7 full days
-      if (count < 60) {
+      // If we have less than a full 7 days of data (approx 10,000 mins), backfill 7 full days
+      if (count < 10000) {
         console.log(`[Backfill] Simulating 7 days of historical orbit data for ${stationId}...`);
+        await redisClient.del(historyKey); // Wipe partial history to prevent duplicates
         const satrecData = await fetchSatrec(stationId);
         
         const now = Date.now();
