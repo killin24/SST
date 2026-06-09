@@ -90,8 +90,8 @@ const fetchAndBroadcastStation = async (stationId) => {
           const score = data.timestamp || now;
           const value = JSON.stringify(data);
           
-          await redisClient.sendCommand(['ZADD', historyKey, score.toString(), value]);
-          await redisClient.sendCommand(['ZREMRANGEBYSCORE', historyKey, '-inf', (now - HISTORY_RETENTION_MS).toString()]);
+          await redisClient.zAdd(historyKey, [{ score: Number(score), value }]);
+          await redisClient.zRemRangeByScore(historyKey, '-inf', (now - HISTORY_RETENTION_MS).toString());
           
           lastHistorySave[stationId] = now;
         }
@@ -178,10 +178,12 @@ io.on('connection', async (socket) => {
         }
 
         // Send historical timeseries (last 5 hours)
-        const historyData = await redisClient.sendCommand([
-          'ZRANGEBYSCORE', `history_${stationId}`, 
-          fiveHoursAgo.toString(), '+inf'
-        ]);
+        const historyData = await redisClient.zRange(
+          `history_${stationId}`, 
+          fiveHoursAgo.toString(), 
+          '+inf', 
+          { BY: 'SCORE' }
+        );
         
         if (historyData && historyData.length > 0) {
           const parsedHistory = historyData.map(str => JSON.parse(str));

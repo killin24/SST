@@ -53,10 +53,12 @@ router.get('/history/:station/download', async (req, res, next) => {
     }
 
     // Fetch all historical data for the station
-    const historyData = await redisClient.sendCommand([
-      'ZRANGEBYSCORE', `history_${station}`, 
-      '-inf', '+inf'
-    ]);
+    const historyData = await redisClient.zRange(
+      `history_${station}`, 
+      '-inf', 
+      '+inf', 
+      { BY: 'SCORE' }
+    );
 
     if (!historyData || historyData.length === 0) {
       return res.status(404).json({ error: 'No historical data found' });
