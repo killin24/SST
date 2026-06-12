@@ -252,7 +252,7 @@ function App() {
           <PayButton
             amount={99}
             label="Support Project"
-            accentColor={accentColor}
+            accentColor={accentHex}
           />
         </div>
 

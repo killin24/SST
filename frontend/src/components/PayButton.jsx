@@ -56,6 +56,30 @@ const PayButton = ({ amount = 499, label = 'Support This Project', accentColor =
         description: 'Support the real-time orbital tracking project',
         image:       '/favicon.svg',
 
+        // Explicitly enable all payment methods including UPI
+        config: {
+          display: {
+            blocks: {
+              upi: {
+                name: 'Pay via UPI',
+                instruments: [
+                  { method: 'upi' },
+                ],
+              },
+              other: {
+                name: 'Other Payment Modes',
+                instruments: [
+                  { method: 'card' },
+                  { method: 'netbanking' },
+                  { method: 'wallet' },
+                ],
+              },
+            },
+            sequence: ['block.upi', 'block.other'],
+            preferences: { show_default_blocks: false },
+          },
+        },
+
         theme: { color: accentColor },
 
         // ── SUCCESS HANDLER ────────────────────────────────────
