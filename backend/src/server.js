@@ -50,30 +50,31 @@ app.use(helmet({
   contentSecurityPolicy: {
     directives: {
       defaultSrc: ["'self'"],
-      scriptSrc: ["'self'", "'unsafe-inline'"],
-      styleSrc: ["'self'", "'unsafe-inline'", "https://unpkg.com", "https://*.cartocdn.com"],
+      scriptSrc:  ["'self'", "'unsafe-inline'", "https://checkout.razorpay.com"],
+      styleSrc:   ["'self'", "'unsafe-inline'", "https://unpkg.com", "https://*.cartocdn.com"],
       imgSrc: [
-        "'self'",
-        "data:",
-        "blob:",
+        "'self'", "data:", "blob:",
         "https://*.basemaps.cartocdn.com",
         "https://*.cartocdn.com",
         "https://unpkg.com",
+        "https://checkout.razorpay.com",
+        "https://*.razorpay.com",
       ],
       connectSrc: [
-        "'self'",
-        "ws:",
-        "wss:",
+        "'self'", "ws:", "wss:",
         "https://api.wheretheiss.at",
         "https://celestrak.org",
         "https://corquaid.github.io",
+        "https://api.razorpay.com",
+        "https://lumberjack.razorpay.com",
       ],
-      fontSrc: ["'self'", "https://fonts.gstatic.com"],
+      frameSrc: ["https://api.razorpay.com", "https://*.razorpay.com"],
+      fontSrc:   ["'self'", "https://fonts.gstatic.com"],
       workerSrc: ["'self'", "blob:"],
     },
   },
 }));
-app.use(cors({ origin: ALLOWED_ORIGINS, methods: ['GET'] }));
+app.use(cors({ origin: ALLOWED_ORIGINS, methods: ['GET', 'POST'] }));
 app.use(rateLimit({
   windowMs: 1 * 60 * 1000,
   max: 120,

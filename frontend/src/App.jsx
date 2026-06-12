@@ -8,6 +8,7 @@ import StationSelector from './components/StationSelector';
 import StationMap from './components/StationMap';
 import CrewPanel from './components/CrewPanel';
 import InfoCard from './components/InfoCard';
+import PayButton from './components/PayButton';
 import {
   Compass, Gauge, ArrowUpCircle, AlertTriangle, RefreshCw,
   Radio, Footprints, Sun, Calendar, Clock, Orbit,
@@ -246,6 +247,13 @@ function App() {
           >
             📥 Download 7-Day Data
           </button>
+
+          {/* Razorpay payment button */}
+          <PayButton
+            amount={99}
+            label="Support Project"
+            accentColor={accentColor}
+          />
         </div>
 
         {!data ? (

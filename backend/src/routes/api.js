@@ -1,9 +1,17 @@
 import express from 'express';
+import crypto  from 'crypto';
+import Razorpay from 'razorpay';
 import { getTelemetry } from '../services/satelliteService.js';
 import { getCrew } from '../services/crewService.js';
 import { redisClient, isRedisReady } from '../config/redisClient.js';
 
 const router = express.Router();
+
+// Razorpay SDK instance — uses KEY_SECRET from .env, never exposed to frontend
+const razorpay = new Razorpay({
+  key_id:     process.env.RAZORPAY_KEY_ID,
+  key_secret: process.env.RAZORPAY_KEY_SECRET,
+});
 
 // Health check
 router.get('/health', (req, res) => {
@@ -91,3 +99,94 @@ router.get('/history/:station/download', async (req, res, next) => {
 });
 
 export default router;
+
+// ─────────────────────────────────────────────────────────────
+// POST /api/payment/order
+// Creates a Razorpay order server-side. The KEY_SECRET never
+// leaves the backend. Returns { orderId, amount, currency }.
+// Body: { amount: number (in rupees) }
+// ─────────────────────────────────────────────────────────────
+router.post('/payment/order', async (req, res) => {
+  try {
+    const { amount } = req.body;
+
+    // Validate: amount must be a positive number
+    const rupees = Number(amount);
+    if (!rupees || rupees <= 0) {
+      return res.status(400).json({ error: 'Invalid amount. Provide a positive number in rupees.' });
+    }
+
+    const paise = Math.round(rupees * 100); // Razorpay works in paise
+    if (paise < 100) {
+      return res.status(400).json({ error: 'Minimum amount is Rs.1 (100 paise).' });
+    }
+
+    const order = await razorpay.orders.create({
+      amount:   paise,
+      currency: 'INR',
+      receipt:  `sst_${Date.now()}`,
+    });
+
+    console.log(`[Payment] Order created: ${order.id} — Rs.${rupees}`);
+
+    // Return only safe, non-secret fields
+    return res.status(201).json({
+      orderId:  order.id,
+      amount:   order.amount,
+      currency: order.currency,
+    });
+
+  } catch (err) {
+    console.error('[Payment /order] Error:', err.message);
+    return res.status(500).json({ error: 'Failed to create payment order.' });
+  }
+});
+
+// ─────────────────────────────────────────────────────────────
+// POST /api/payment/verify
+// Verifies the Razorpay HMAC-SHA256 signature after checkout.
+// Prevents fake/spoofed payment confirmations.
+// Body: { razorpay_order_id, razorpay_payment_id, razorpay_signature }
+// ─────────────────────────────────────────────────────────────
+router.post('/payment/verify', (req, res) => {
+  try {
+    const { razorpay_order_id, razorpay_payment_id, razorpay_signature } = req.body;
+
+    if (!razorpay_order_id || !razorpay_payment_id || !razorpay_signature) {
+      return res.status(400).json({ error: 'Missing payment verification fields.' });
+    }
+
+    // Algorithm: HMAC-SHA256( order_id + "|" + payment_id , KEY_SECRET )
+    const body     = `${razorpay_order_id}|${razorpay_payment_id}`;
+    const expected = crypto
+      .createHmac('sha256', process.env.RAZORPAY_KEY_SECRET)
+      .update(body)
+      .digest('hex');
+
+    // timingSafeEqual prevents timing-based side-channel attacks
+    const isValid = crypto.timingSafeEqual(
+      Buffer.from(expected),
+      Buffer.from(razorpay_signature)
+    );
+
+    if (!isValid) {
+      console.warn(`[Payment /verify] INVALID signature for order ${razorpay_order_id}`);
+      return res.status(400).json({ error: 'Signature verification failed. Payment not authorised.' });
+    }
+
+    console.log(`[Payment /verify] Payment verified — ${razorpay_payment_id}`);
+
+    // Add your business logic here:
+    // e.g., unlock premium features, send email, store to DB
+
+    return res.status(200).json({
+      success:   true,
+      paymentId: razorpay_payment_id,
+      message:   'Payment verified successfully.',
+    });
+
+  } catch (err) {
+    console.error('[Payment /verify] Error:', err.message);
+    return res.status(500).json({ error: 'Payment verification failed.' });
+  }
+});
