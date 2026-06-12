@@ -134,10 +134,12 @@ router.post('/payment/order', async (req, res) => {
     console.log(`[Payment] Order created: ${order.id} — Rs.${rupees}`);
 
     // Return only safe, non-secret fields
+    // key_id is the PUBLIC key — safe to send to the frontend
     return res.status(201).json({
       orderId:  order.id,
       amount:   order.amount,
       currency: order.currency,
+      keyId:    process.env.RAZORPAY_KEY_ID,
     });
 
   } catch (err) {

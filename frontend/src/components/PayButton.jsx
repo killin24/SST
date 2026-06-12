@@ -17,14 +17,7 @@ const PayButton = ({ amount = 499, label = 'Support This Project', accentColor =
   const [status, setStatus] = useState('idle'); // idle | loading | success | error
   const [errorMsg, setErrorMsg] = useState('');
 
-  // VITE_RAZORPAY_KEY_ID is the PUBLIC key — safe to expose in the browser
-  const KEY_ID = import.meta.env.VITE_RAZORPAY_KEY_ID;
-
   const handlePay = async () => {
-    if (!KEY_ID) {
-      console.error('[PayButton] VITE_RAZORPAY_KEY_ID is not set in frontend/.env');
-      return;
-    }
 
     setStatus('loading');
     setErrorMsg('');
@@ -43,11 +36,15 @@ const PayButton = ({ amount = 499, label = 'Support This Project', accentColor =
         throw new Error(err.error || 'Could not create order.');
       }
 
-      const { orderId, amount: paise, currency } = await orderRes.json();
+      const { orderId, amount: paise, currency, keyId } = await orderRes.json();
+
+      if (!keyId) {
+        throw new Error('Payment gateway not configured on server.');
+      }
 
       // ── STEP 2: Open Razorpay checkout modal ─────────────────
       const options = {
-        key:      KEY_ID,   // Public key only — KEY_SECRET stays on server
+        key:      keyId,   // Public key returned from backend — works on any environment
         amount:   paise,    // In paise
         currency,
         order_id: orderId,
