@@ -7,12 +7,6 @@ import { redisClient, isRedisReady } from '../config/redisClient.js';
 
 const router = express.Router();
 
-// Razorpay SDK instance — uses KEY_SECRET from .env, never exposed to frontend
-const razorpay = new Razorpay({
-  key_id:     process.env.RAZORPAY_KEY_ID,
-  key_secret: process.env.RAZORPAY_KEY_SECRET,
-});
-
 // Health check
 router.get('/health', (req, res) => {
   res.status(200).json({ status: 'UP', timestamp: new Date() });
@@ -108,6 +102,16 @@ export default router;
 // ─────────────────────────────────────────────────────────────
 router.post('/payment/order', async (req, res) => {
   try {
+    if (!process.env.RAZORPAY_KEY_ID || !process.env.RAZORPAY_KEY_SECRET) {
+      return res.status(500).json({ error: 'Payment gateway not configured. Set RAZORPAY_KEY_ID and RAZORPAY_KEY_SECRET in environment variables.' });
+    }
+
+    // Lazy instantiation — only created when a payment is actually requested
+    const razorpay = new Razorpay({
+      key_id:     process.env.RAZORPAY_KEY_ID,
+      key_secret: process.env.RAZORPAY_KEY_SECRET,
+    });
+
     const { amount } = req.body;
 
     // Validate: amount must be a positive number
