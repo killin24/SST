@@ -36,11 +36,24 @@ const ALLOWED_ORIGINS = [
   'http://127.0.0.1:5176',
 ];
 
+// On the live site (Render), the frontend and backend are the same origin
+// so CORS isn't needed — but for safety allow any HTTPS origin too
+const corsOriginFn = (origin, callback) => {
+  // Same-origin requests (served by Express static) have no Origin header
+  if (!origin) return callback(null, true);
+  // Allow all localhost variants for local dev
+  if (ALLOWED_ORIGINS.includes(origin)) return callback(null, true);
+  // Allow any HTTPS origin (covers Render, custom domains, etc.)
+  if (origin.startsWith('https://')) return callback(null, true);
+  callback(new Error(`CORS: origin ${origin} not allowed`));
+};
+
+
 // ─────────────────────────────────────────────────────────────
 // Socket.io — real-time broadcast channel
 // ─────────────────────────────────────────────────────────────
 const io = new Server(server, {
-  cors: { origin: ALLOWED_ORIGINS, methods: ['GET', 'POST'] },
+  cors: { origin: corsOriginFn, methods: ['GET', 'POST'] },
 });
 
 // ─────────────────────────────────────────────────────────────
@@ -74,7 +87,7 @@ app.use(helmet({
     },
   },
 }));
-app.use(cors({ origin: ALLOWED_ORIGINS, methods: ['GET', 'POST'] }));
+app.use(cors({ origin: corsOriginFn, methods: ['GET', 'POST'] }));
 app.use(rateLimit({
   windowMs: 1 * 60 * 1000,
   max: 120,

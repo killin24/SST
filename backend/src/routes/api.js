@@ -92,8 +92,6 @@ router.get('/history/:station/download', async (req, res, next) => {
   }
 });
 
-export default router;
-
 // ─────────────────────────────────────────────────────────────
 // POST /api/payment/order
 // Creates a Razorpay order server-side. The KEY_SECRET never
@@ -196,3 +194,5 @@ router.post('/payment/verify', (req, res) => {
     return res.status(500).json({ error: 'Payment verification failed.' });
   }
 });
+
+export default router;
